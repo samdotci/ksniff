@@ -56,7 +56,8 @@ jobs:
       
       - name: Build static-tcpdmp
         run: |
-          sudo apt-get install libpcap-dev
+          sudo apt-get update
+          sudo apt-get install -y libpcap-dev
           make static-tcpdump
           make install
           
