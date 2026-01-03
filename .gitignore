@@ -1,5 +1,6 @@
 # Build artifacts
 kubectl-sniff
+kubectl-sniff-arm64
 kubectl-sniff-darwin
 kubectl-sniff-darwin-arm64
 kubectl-sniff-windows
