@@ -10,7 +10,7 @@ You get the full power of Wireshark with minimal impact on your running pods.
 ### Intro
 
 When working with micro-services, many times it's very helpful to get a capture of the network
-activity between your micro-service and it's dependencies.
+activity between your micro-service and its dependencies.
 
 ksniff uses Kubernetes ephemeral containers to attach a tcpdump container to your target pod,
 redirecting its output to your local Wireshark for smooth network debugging experience.
