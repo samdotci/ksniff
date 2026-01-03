@@ -7,17 +7,13 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
 	"ksniff/kube"
 	"ksniff/pkg/config"
 	"ksniff/pkg/service/sniffer"
-	"ksniff/pkg/service/sniffer/runtime"
 
-	"github.com/mitchellh/go-homedir"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -40,10 +36,6 @@ var (
 )
 
 const minimumNumberOfArguments = 1
-const tcpdumpBinaryName = "static-tcpdump"
-const tcpdumpRemotePath = "/tmp/static-tcpdump"
-
-var tcpdumpLocalBinaryPathLookupList []string
 
 type Ksniff struct {
 	configFlags      *genericclioptions.ConfigFlags
@@ -66,8 +58,8 @@ func NewCmdSniff(streams genericclioptions.IOStreams) *cobra.Command {
 	ksniff := NewKsniff(ksniffSettings)
 
 	cmd := &cobra.Command{
-		Use:          "sniff pod [-n namespace] [-c container] [-f filter] [-o output-file] [-l local-tcpdump-path] [-r remote-tcpdump-path]",
-		Short:        "Perform network sniffing on a container running in a kubernetes cluster.",
+		Use:          "sniff pod [-n namespace] [-c container] [-f filter] [-o output-file]",
+		Short:        "Perform network sniffing on a container running in a kubernetes cluster using ephemeral containers.",
 		Example:      ksniffExample,
 		SilenceUsage: true,
 		RunE: func(c *cobra.Command, args []string) error {
@@ -106,37 +98,16 @@ func NewCmdSniff(streams genericclioptions.IOStreams) *cobra.Command {
 	_ = viper.BindEnv("output-file", "KUBECTL_PLUGINS_LOCAL_FLAG_OUTPUT_FILE")
 	_ = viper.BindPFlag("output-file", cmd.Flags().Lookup("output-file"))
 
-	cmd.Flags().StringVarP(&ksniffSettings.UserSpecifiedLocalTcpdumpPath, "local-tcpdump-path", "l", "",
-		"local static tcpdump binary path (optional)")
-	_ = viper.BindEnv("local-tcpdump-path", "KUBECTL_PLUGINS_LOCAL_FLAG_LOCAL_TCPDUMP_PATH")
-	_ = viper.BindPFlag("local-tcpdump-path", cmd.Flags().Lookup("local-tcpdump-path"))
-
-	cmd.Flags().StringVarP(&ksniffSettings.UserSpecifiedRemoteTcpdumpPath, "remote-tcpdump-path", "r", tcpdumpRemotePath,
-		"remote static tcpdump binary path (optional)")
-	_ = viper.BindEnv("remote-tcpdump-path", "KUBECTL_PLUGINS_LOCAL_FLAG_REMOTE_TCPDUMP_PATH")
-	_ = viper.BindPFlag("remote-tcpdump-path", cmd.Flags().Lookup("remote-tcpdump-path"))
-
 	cmd.Flags().BoolVarP(&ksniffSettings.UserSpecifiedVerboseMode, "verbose", "v", false,
 		"if specified, ksniff output will include debug information (optional)")
 	_ = viper.BindEnv("verbose", "KUBECTL_PLUGINS_LOCAL_FLAG_VERBOSE")
 	_ = viper.BindPFlag("verbose", cmd.Flags().Lookup("verbose"))
 
-	cmd.Flags().BoolVarP(&ksniffSettings.UserSpecifiedPrivilegedMode, "privileged", "p", false,
-		"if specified, ksniff will deploy another pod that have privileges to attach target pod network namespace")
-	_ = viper.BindEnv("privileged", "KUBECTL_PLUGINS_LOCAL_FLAG_PRIVILEGED")
-	_ = viper.BindPFlag("privileged", cmd.Flags().Lookup("privileged"))
-
-	cmd.Flags().DurationVarP(&ksniffSettings.UserSpecifiedPodCreateTimeout, "pod-creation-timeout", "",
-		1*time.Minute, "the length of time to wait for privileged pod to be created (e.g. 20s, 2m, 1h). "+
-			"A value of zero means the creation never times out.")
-
-	cmd.Flags().StringVarP(&ksniffSettings.Image, "image", "", "",
-		"the privileged container image (optional)")
-	_ = viper.BindEnv("image", "KUBECTL_PLUGINS_LOCAL_FLAG_IMAGE")
-	_ = viper.BindPFlag("image", cmd.Flags().Lookup("image"))
+	cmd.Flags().DurationVarP(&ksniffSettings.UserSpecifiedContainerTimeout, "timeout", "t",
+		1*time.Minute, "the length of time to wait for ephemeral container to be ready (e.g. 20s, 2m, 1h)")
 
 	cmd.Flags().StringVarP(&ksniffSettings.TCPDumpImage, "tcpdump-image", "", "",
-		"the tcpdump container image (optional)")
+		"the container image with tcpdump (default: nicolaka/netshoot:v0.14)")
 	_ = viper.BindEnv("tcpdump-image", "KUBECTL_PLUGINS_LOCAL_FLAG_TCPDUMP_IMAGE")
 	_ = viper.BindPFlag("tcpdump-image", cmd.Flags().Lookup("tcpdump-image"))
 
@@ -144,16 +115,6 @@ func NewCmdSniff(streams genericclioptions.IOStreams) *cobra.Command {
 		"kubectl context to work on (optional)")
 	_ = viper.BindEnv("context", "KUBECTL_PLUGINS_CURRENT_CONTEXT")
 	_ = viper.BindPFlag("context", cmd.Flags().Lookup("context"))
-
-	cmd.Flags().StringVarP(&ksniffSettings.SocketPath, "socket", "", "",
-		"the container runtime socket path (optional)")
-	_ = viper.BindEnv("socket", "KUBECTL_PLUGINS_SOCKET_PATH")
-	_ = viper.BindPFlag("socket", cmd.Flags().Lookup("socket"))
-
-	cmd.Flags().StringVarP(&ksniffSettings.UserSpecifiedServiceAccount, "serviceaccount", "s", "",
-		"the privileged container service account (optional)")
-	_ = viper.BindEnv("serviceaccount", "KUBECTL_PLUGINS_LOCAL_FLAG_SERVICE_ACCOUNT")
-	_ = viper.BindPFlag("serviceaccount", cmd.Flags().Lookup("serviceaccount"))
 
 	return cmd
 }
@@ -175,29 +136,15 @@ func (o *Ksniff) Complete(cmd *cobra.Command, args []string) error {
 	o.settings.UserSpecifiedInterface = viper.GetString("interface")
 	o.settings.UserSpecifiedFilter = viper.GetString("filter")
 	o.settings.UserSpecifiedOutputFile = viper.GetString("output-file")
-	o.settings.UserSpecifiedLocalTcpdumpPath = viper.GetString("local-tcpdump-path")
-	o.settings.UserSpecifiedRemoteTcpdumpPath = viper.GetString("remote-tcpdump-path")
 	o.settings.UserSpecifiedVerboseMode = viper.GetBool("verbose")
-	o.settings.UserSpecifiedPrivilegedMode = viper.GetBool("privileged")
 	o.settings.UserSpecifiedKubeContext = viper.GetString("context")
-	o.settings.Image = viper.GetString("image")
 	o.settings.TCPDumpImage = viper.GetString("tcpdump-image")
-	o.settings.SocketPath = viper.GetString("socket")
-	o.settings.UseDefaultImage = !viper.IsSet("image")
-	o.settings.UseDefaultTCPDumpImage = !viper.IsSet("tcpdump-image")
-	o.settings.UseDefaultSocketPath = !viper.IsSet("socket")
-	o.settings.UserSpecifiedServiceAccount = viper.GetString("serviceaccount")
 
 	var err error
 
 	if o.settings.UserSpecifiedVerboseMode {
 		log.Info("running in verbose mode")
 		log.SetLevel(log.DebugLevel)
-	}
-
-	tcpdumpLocalBinaryPathLookupList, err = o.buildTcpdumpBinaryPathLookupList()
-	if err != nil {
-		return err
 	}
 
 	o.rawConfig, err = o.configFlags.ToRawKubeConfigLoader().RawConfig()
@@ -243,26 +190,6 @@ func (o *Ksniff) Complete(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func (o *Ksniff) buildTcpdumpBinaryPathLookupList() ([]string, error) {
-	userHomeDir, err := homedir.Dir()
-	if err != nil {
-		return nil, err
-	}
-
-	ksniffBinaryPath, err := filepath.EvalSymlinks(os.Args[0])
-	if err != nil {
-		return nil, err
-	}
-
-	ksniffBinaryDir := filepath.Dir(ksniffBinaryPath)
-	ksniffBinaryPath = filepath.Join(ksniffBinaryDir, tcpdumpBinaryName)
-
-	kubeKsniffPluginFolder := filepath.Join(userHomeDir, filepath.FromSlash("/.kube/plugin/sniff/"), tcpdumpBinaryName)
-
-	return append([]string{o.settings.UserSpecifiedLocalTcpdumpPath, ksniffBinaryPath},
-		filepath.Join("/usr/local/bin/", tcpdumpBinaryName), kubeKsniffPluginFolder), nil
-}
-
 func (o *Ksniff) Validate() error {
 	if len(o.rawConfig.CurrentContext) == 0 {
 		return errors.New("context doesn't exist")
@@ -270,22 +197,6 @@ func (o *Ksniff) Validate() error {
 
 	if o.resultingContext.Namespace == "" {
 		return errors.New("namespace value is empty should be custom or default")
-	}
-
-	var err error
-
-	if !o.settings.UserSpecifiedPrivilegedMode {
-		o.settings.UserSpecifiedLocalTcpdumpPath, err = findLocalTcpdumpBinaryPath()
-		if err != nil {
-			return err
-		}
-
-		log.Infof("using tcpdump path at: '%s'", o.settings.UserSpecifiedLocalTcpdumpPath)
-	} else if o.settings.UserSpecifiedServiceAccount != "" {
-		_, err := o.clientset.CoreV1().ServiceAccounts(o.resultingContext.Namespace).Get(context.TODO(), o.settings.UserSpecifiedServiceAccount, v1.GetOptions{})
-		if err != nil {
-			return err
-		}
 	}
 
 	pod, err := o.clientset.CoreV1().Pods(o.resultingContext.Namespace).Get(context.TODO(), o.settings.UserSpecifiedPodName, v1.GetOptions{})
@@ -296,8 +207,6 @@ func (o *Ksniff) Validate() error {
 	if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
 		return errors.Errorf("cannot sniff on a container in a completed pod; current phase is %s", pod.Status.Phase)
 	}
-
-	o.settings.DetectedPodNodeName = pod.Spec.NodeName
 
 	log.Debugf("pod '%s' status: '%s'", o.settings.UserSpecifiedPodName, pod.Status.Phase)
 
@@ -311,54 +220,27 @@ func (o *Ksniff) Validate() error {
 		log.Infof("selected container: '%s'", o.settings.UserSpecifiedContainer)
 	}
 
-	if err := o.findContainerId(pod); err != nil {
+	// Validate the container exists
+	if err := o.validateContainerExists(pod); err != nil {
 		return err
 	}
 
 	kubernetesApiService := kube.NewKubernetesApiService(o.clientset, o.restConfig, o.resultingContext.Namespace)
 
-	if o.settings.UserSpecifiedPrivilegedMode {
-		log.Info("sniffing method: privileged pod")
-		bridge := runtime.NewContainerRuntimeBridge(o.settings.DetectedContainerRuntime)
-		o.snifferService = sniffer.NewPrivilegedPodRemoteSniffingService(o.settings, kubernetesApiService, bridge)
-	} else {
-		log.Info("sniffing method: upload static tcpdump")
-		o.snifferService = sniffer.NewUploadTcpdumpRemoteSniffingService(o.settings, kubernetesApiService)
-	}
+	log.Info("sniffing method: ephemeral container")
+	o.snifferService = sniffer.NewEphemeralContainerSnifferService(o.settings, kubernetesApiService)
 
 	return nil
 }
 
-func (o *Ksniff) findContainerId(pod *corev1.Pod) error {
+func (o *Ksniff) validateContainerExists(pod *corev1.Pod) error {
 	for _, containerStatus := range pod.Status.ContainerStatuses {
 		if o.settings.UserSpecifiedContainer == containerStatus.Name {
-			result := strings.Split(containerStatus.ContainerID, "://")
-			if len(result) != 2 {
-				break
-			}
-			o.settings.DetectedContainerRuntime = result[0]
-			o.settings.DetectedContainerId = result[1]
 			return nil
 		}
 	}
 
 	return errors.Errorf("couldn't find container: '%s' in pod: '%s'", o.settings.UserSpecifiedContainer, o.settings.UserSpecifiedPodName)
-}
-
-func findLocalTcpdumpBinaryPath() (string, error) {
-	log.Debugf("searching for tcpdump binary using lookup list: '%v'", tcpdumpLocalBinaryPathLookupList)
-
-	for _, possibleTcpdumpPath := range tcpdumpLocalBinaryPathLookupList {
-		if _, err := os.Stat(possibleTcpdumpPath); err == nil {
-			log.Debugf("tcpdump binary found at: '%s'", possibleTcpdumpPath)
-
-			return possibleTcpdumpPath, nil
-		}
-
-		log.Debugf("tcpdump binary was not found at: '%s'", possibleTcpdumpPath)
-	}
-
-	return "", errors.Errorf("couldn't find static tcpdump binary on any of: '%v'", tcpdumpLocalBinaryPathLookupList)
 }
 
 func (o *Ksniff) setupSignalHandler() chan interface{} {

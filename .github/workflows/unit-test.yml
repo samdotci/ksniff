@@ -3,9 +3,9 @@ name: unit-test
 on:
   # Triggers the workflow on push or pull request events but only for the master branch
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -15,11 +15,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+
+      # Needed for running workflows locally via `act` as it is not
+      # present in the `catthehacker/ubuntu:act-latest` image.
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: "v1.34.3"
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.24.11
+
       - name: Copy kubeconfig
         run: |
           mkdir ~/.kube
-          cp .github/workflows/assets/placeholder-kubeconfig.yaml ~/.kube/config
+          cp assets/placeholder-kubeconfig.yaml ~/.kube/config
+
       # Run the tests
       - name: Run make test
         run: make test

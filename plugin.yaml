@@ -1,13 +1,11 @@
 name: "sniff"
-shortDesc: "Sniffing on remote kubernetes pod"
+shortDesc: "Sniffing on remote kubernetes pod using ephemeral containers"
 longDesc: >
-  Ease the operation of sniffing on remote kubernetes pod.
+  Ease the operation of sniffing on remote kubernetes pod using ephemeral containers.
+  Requires Kubernetes 1.23+.
 example: "kubectl sniff consul-54897664dd-gb4qg"
 command: "./kubectl-sniff"
 flags:
-  - name: "pod"
-    shorthand: "p"
-    desc: "pod name"
   - name: "container"
     shorthand: "c"
     desc: "Optional. Container name. Used when running multiple containers within a pod. If omitted, the first container in the pod will be chosen."
@@ -17,15 +15,11 @@ flags:
   - name: "output-file"
     shorthand: "o"
     desc: "Optional. if specified, ksniff will redirect tcpdump output to local file instead of wireshark."
-  - name: "local-tcpdump-path"
-    shorthand: "l"
-    desc: "Optional. if specified, ksniff will use this path as the local path of the static tcpdump binary."
-  - name: "remote-tcpdump-path"
-    shorthand: "r"
-    desc: "Optional. if specified, ksniff will use the specified path as the remote path to upload static tcpdump to."
+  - name: "tcpdump-image"
+    desc: "Optional. Container image with tcpdump (default: nicolaka/netshoot:v0.14)"
+  - name: "timeout"
+    shorthand: "t"
+    desc: "Optional. Timeout for ephemeral container to become ready (default: 1m)"
   - name: "verbose"
     shorthand: "v"
     desc: "Optional. if specified, ksniff output will include debug information"
-  - name: "privileged"
-    shorthand: "p"
-    desc: "Optional. if specified, ksniff will deploy another pod that has privileges to attach target pod network namespace"

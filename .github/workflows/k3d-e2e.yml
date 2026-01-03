@@ -6,9 +6,9 @@ name: k3s-e2e
 on:
   # Triggers the workflow on push or pull request events but only for the master branch
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -18,30 +18,43 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      - uses: AbsaOSS/k3d-action@v1.5.0
+      # Needed for running workflows locally via `act` as it is not
+      # present in the `catthehacker/ubuntu:act-latest` image.
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: "v1.34.3"
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.24.11
+
+      - uses: AbsaOSS/k3d-action@v2.4.0
         name: "Create Single Cluster"
         with:
           cluster-name: "test-cluster-1"
           args: --agents 1
 
-      - name: Deploy test pod
+      - name: Switch context to new cluster
         run: |
           kubectl config use-context k3d-test-cluster-1
-          kubectl create -f .github/workflows/assets/busybox-pod.yaml
+
+      - name: Deploy test pod
+        run: |
+          kubectl create -f assets/busybox-pod.yaml
           kubectl wait --for=condition=Ready pod/busybox-sleep
 
       - name: Build
         run: |
           make
 
-      - name: Run ksniff privileged
+      - name: Run ksniff with ephemeral container
         run: |
-          kubectl config use-context k3d-test-cluster-1
           sleep 60 && pkill kubectl-sniff & 
           set +e
-          ./kubectl-sniff busybox-sleep --privileged --namespace default --socket /run/k3s/containerd/containerd.sock --output-file /tmp/output.pcap
+          ./kubectl-sniff busybox-sleep --namespace default --output-file /tmp/output.pcap
           set -e
           if [ ! -f /tmp/output.pcap ]; then
             echo "PCAP not created"
@@ -53,22 +66,9 @@ jobs:
         run: |
           kubectl get pods 
           kubectl get events
-      
-      - name: Build static-tcpdmp
-        run: |
-          sudo apt-get install libpcap-dev
-          make static-tcpdump
-          make install
-          
-      - name: Run ksniff with static tcpdump
-        run: |
-          kubectl config use-context k3d-test-cluster-1
-          sleep 60 && pkill kubectl-sniff & 
-          set +e
-          ./kubectl-sniff busybox-sleep --namespace default --output-file /tmp/output.pcap
-          set -e
-          if [ ! -f /tmp/output.pcap ]; then
-            echo "PCAP not created"
-            exit 1
-          fi
+          kubectl describe pod/busybox-sleep
 
+      - if: always()
+        name: Delete cluster
+        run: |
+          k3d cluster delete test-cluster-1
