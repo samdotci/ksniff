@@ -158,12 +158,16 @@ func TestStart_Success(t *testing.T) {
 
 	var capturedPodName, capturedContainerName string
 	var capturedCommand []string
+	var capturedStdOut io.Writer
 
 	mockService := &MockKubernetesApiService{
 		ExecuteCommandFunc: func(podName string, containerName string, command []string, stdOut io.Writer) (int, error) {
 			capturedPodName = podName
 			capturedContainerName = containerName
 			capturedCommand = command
+			capturedStdOut = stdOut
+			// Write some test data to stdOut to verify it's passed through
+			stdOut.Write([]byte("test output"))
 			return 0, nil
 		},
 	}
@@ -179,6 +183,8 @@ func TestStart_Success(t *testing.T) {
 	assert.Equal(t, "test-pod", capturedPodName)
 	assert.Equal(t, EphemeralContainerName, capturedContainerName)
 	assert.Equal(t, []string{"tcpdump", "-i", "eth0", "-U", "-w", "-", "tcp port 80"}, capturedCommand)
+	assert.Equal(t, output, capturedStdOut, "stdOut should be passed through to ExecuteCommand")
+	assert.Equal(t, "test output", output.String(), "output written by ExecuteCommand should appear in stdOut")
 }
 
 // TestStart_NonZeroExitCode tests Start when command exits with non-zero code
@@ -230,6 +236,8 @@ func TestStart_ExecutionError(t *testing.T) {
 	// then
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "tcpdump failed")
+	assert.Contains(t, err.Error(), "exit code: '0'")
+	assert.Contains(t, err.Error(), "connection failed", "original error message should be preserved")
 }
 
 // TestStart_BothErrorAndExitCode tests Start when both error and non-zero exit code occur
@@ -256,4 +264,5 @@ func TestStart_BothErrorAndExitCode(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "tcpdump failed")
 	assert.Contains(t, err.Error(), "exit code: '127'")
+	assert.Contains(t, err.Error(), "command not found", "original error message should be preserved")
 }
