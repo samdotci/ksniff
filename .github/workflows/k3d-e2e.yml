@@ -56,14 +56,37 @@ jobs:
 
       - name: Run ksniff with ephemeral container
         run: |
-          sleep 60 && pkill kubectl-sniff & 
-          set +e
-          ./dist/kubectl-sniff_linux_amd64_v1/kubectl-sniff busybox-sleep --namespace default --output-file /tmp/output.pcap
-          set -e
+          # Start ksniff in background
+          ./dist/kubectl-sniff_linux_amd64_v1/kubectl-sniff busybox-sleep --namespace default --output-file /tmp/output.pcap &
+          KSNIFF_PID=$!
+
+          # Wait for pcap file to be created (up to 60 seconds)
+          echo "Waiting for packet capture to start..."
+          for i in {1..60}; do
+            if [ -f /tmp/output.pcap ] && [ -s /tmp/output.pcap ]; then
+              echo "Packet capture started after ${i} seconds"
+              sleep 2  # Give it a moment to capture some packets
+              break
+            fi
+            sleep 1
+          done
+
+          # Kill ksniff
+          kill $KSNIFF_PID 2>/dev/null || true
+          wait $KSNIFF_PID 2>/dev/null || true
+
+          # Verify pcap was created
           if [ ! -f /tmp/output.pcap ]; then
-            echo "PCAP not created"
+            echo "ERROR: PCAP file not created"
             exit 1
           fi
+
+          if [ ! -s /tmp/output.pcap ]; then
+            echo "ERROR: PCAP file is empty"
+            exit 1
+          fi
+
+          echo "Success! PCAP file created ($(stat -f%z /tmp/output.pcap 2>/dev/null || stat -c%s /tmp/output.pcap) bytes)"
 
       - if: failure()
         name: Check pod and events
