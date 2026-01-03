@@ -1,10 +1,11 @@
-TCPDUMP_VERSION=4.9.2
+TCPDUMP_VERSION=4.99.4
+LIBPCAP_VERSION=1.10.4
 STATIC_TCPDUMP_NAME=static-tcpdump
 NEW_PLUGIN_SYSTEM_MINIMUM_KUBECTL_VERSION=12
 UNAME := $(shell uname)
 ARCH_NAME := $(shell uname -m)
-KUBECTL_MINOR_VERSION=$(shell kubectl version --client=true --short=true -o yaml | grep minor | grep -Eow "[0-9]+")
-IS_NEW_PLUGIN_SUBSYSTEM := $(shell [ $(KUBECTL_MINOR_VERSION) -ge $(NEW_PLUGIN_SYSTEM_MINIMUM_KUBECTL_VERSION) ] && echo true)
+KUBECTL_MINOR_VERSION=$(shell kubectl version --client -o yaml 2>/dev/null | grep minor | grep -Eow "[0-9]+" || echo "0")
+IS_NEW_PLUGIN_SUBSYSTEM := $(shell test $(KUBECTL_MINOR_VERSION) -ge $(NEW_PLUGIN_SYSTEM_MINIMUM_KUBECTL_VERSION) && echo true || echo false)
 
 ifeq ($(IS_NEW_PLUGIN_SUBSYSTEM),true)
 PLUGIN_FOLDER=/usr/local/bin
@@ -40,11 +41,16 @@ test:
 	GO111MODULE=on go test ./...
 
 static-tcpdump:
-	wget http://www.tcpdump.org/release/tcpdump-${TCPDUMP_VERSION}.tar.gz
+	# Build libpcap from source first to get static library
+	wget https://www.tcpdump.org/release/libpcap-${LIBPCAP_VERSION}.tar.gz
+	tar -xvf libpcap-${LIBPCAP_VERSION}.tar.gz
+	cd libpcap-${LIBPCAP_VERSION} && ./configure --disable-shared --enable-static && make
+	# Build tcpdump against the static libpcap
+	wget https://www.tcpdump.org/release/tcpdump-${TCPDUMP_VERSION}.tar.gz
 	tar -xvf tcpdump-${TCPDUMP_VERSION}.tar.gz
-	cd tcpdump-${TCPDUMP_VERSION} && CFLAGS=-static ./configure --without-crypto && make
+	cd tcpdump-${TCPDUMP_VERSION} && CFLAGS="-I$$(pwd)/../libpcap-${LIBPCAP_VERSION}" LDFLAGS="-L$$(pwd)/../libpcap-${LIBPCAP_VERSION}" ./configure --without-crypto && make
 	mv tcpdump-${TCPDUMP_VERSION}/tcpdump ./${STATIC_TCPDUMP_NAME}
-	rm -rf tcpdump-${TCPDUMP_VERSION} tcpdump-${TCPDUMP_VERSION}.tar.gz
+	rm -rf tcpdump-${TCPDUMP_VERSION} tcpdump-${TCPDUMP_VERSION}.tar.gz libpcap-${LIBPCAP_VERSION} libpcap-${LIBPCAP_VERSION}.tar.gz
 
 package:
 	zip ksniff.zip kubectl-sniff kubectl-sniff-windows kubectl-sniff-darwin kubectl-sniff-darwin-arm64 static-tcpdump Makefile plugin.yaml LICENSE
