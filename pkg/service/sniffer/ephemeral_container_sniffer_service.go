@@ -69,6 +69,9 @@ func (e *EphemeralContainerSnifferService) Start(stdOut io.Writer) error {
 		stdOut,
 	)
 	if err != nil || exitCode != 0 {
+		if err != nil {
+			return errors.Wrapf(err, "tcpdump failed, exit code: '%d'", exitCode)
+		}
 		return errors.Errorf("tcpdump failed, exit code: '%d'", exitCode)
 	}
 
