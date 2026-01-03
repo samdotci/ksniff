@@ -11,7 +11,7 @@ import (
 
 const (
 	EphemeralContainerName = "ksniff-debug"
-	DefaultTcpdumpImage    = "nicolaka/netshoot:v0.14"
+	DefaultTcpdumpImage    = "docker.io/nicolaka/netshoot:v0.14"
 )
 
 type EphemeralContainerSnifferService struct {
