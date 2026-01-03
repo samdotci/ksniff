@@ -5,7 +5,7 @@ NEW_PLUGIN_SYSTEM_MINIMUM_KUBECTL_VERSION=12
 UNAME := $(shell uname)
 ARCH_NAME := $(shell uname -m)
 KUBECTL_MINOR_VERSION=$(shell kubectl version --client -o yaml 2>/dev/null | grep minor | grep -Eow "[0-9]+" || echo "0")
-IS_NEW_PLUGIN_SUBSYSTEM := $(shell test $(KUBECTL_MINOR_VERSION) -ge $(NEW_PLUGIN_SYSTEM_MINIMUM_KUBECTL_VERSION) && echo true || echo false)
+IS_NEW_PLUGIN_SUBSYSTEM := $(shell test "$(KUBECTL_MINOR_VERSION)" -ge $(NEW_PLUGIN_SYSTEM_MINIMUM_KUBECTL_VERSION) 2>/dev/null && echo true || echo false)
 
 ifeq ($(IS_NEW_PLUGIN_SUBSYSTEM),true)
 PLUGIN_FOLDER=/usr/local/bin
@@ -48,7 +48,10 @@ static-tcpdump:
 	# Build tcpdump against the static libpcap
 	wget https://www.tcpdump.org/release/tcpdump-${TCPDUMP_VERSION}.tar.gz
 	tar -xvf tcpdump-${TCPDUMP_VERSION}.tar.gz
-	cd tcpdump-${TCPDUMP_VERSION} && CFLAGS="-I$$(pwd)/../libpcap-${LIBPCAP_VERSION}" LDFLAGS="-L$$(pwd)/../libpcap-${LIBPCAP_VERSION}" ./configure --without-crypto && make
+	cd tcpdump-${TCPDUMP_VERSION} && \
+		CFLAGS="-I$$(pwd)/../libpcap-${LIBPCAP_VERSION}" \
+		LDFLAGS="-L$$(pwd)/../libpcap-${LIBPCAP_VERSION}" \
+		./configure --without-crypto && make
 	mv tcpdump-${TCPDUMP_VERSION}/tcpdump ./${STATIC_TCPDUMP_NAME}
 	rm -rf tcpdump-${TCPDUMP_VERSION} tcpdump-${TCPDUMP_VERSION}.tar.gz libpcap-${LIBPCAP_VERSION} libpcap-${LIBPCAP_VERSION}.tar.gz
 
