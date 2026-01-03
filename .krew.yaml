@@ -4,31 +4,31 @@ metadata:
   name: sniff
 spec:
   version: {{ .TagName }}
-  homepage: https://github.com/eldadru/ksniff
+  homepage: https://github.com/samdotci/ksniff
   platforms:
-  - {{ addURIAndSha "https://github.com/eldadru/ksniff/releases/download/{{ .TagName }}/ksniff.zip" .TagName }}
+  - {{ addURIAndSha "https://github.com/samdotci/ksniff/releases/download/{{ .TagName }}/ksniff_{{ .TagName }}_darwin_amd64.tar.gz" .TagName }}
     bin: kubectl-sniff
     files:
-    - from: kubectl-sniff-darwin
-      to: kubectl-sniff
+    - from: kubectl-sniff
+      to: .
     - from: LICENSE
       to: .
     selector:
       matchLabels:
         os: darwin
         arch: amd64
-  - {{ addURIAndSha "https://github.com/eldadru/ksniff/releases/download/{{ .TagName }}/ksniff.zip" .TagName }}
+  - {{ addURIAndSha "https://github.com/samdotci/ksniff/releases/download/{{ .TagName }}/ksniff_{{ .TagName }}_darwin_arm64.tar.gz" .TagName }}
     bin: kubectl-sniff
     files:
-    - from: kubectl-sniff-darwin-arm64
-      to: kubectl-sniff
+    - from: kubectl-sniff
+      to: .
     - from: LICENSE
       to: .
     selector:
       matchLabels:
         os: darwin
         arch: arm64
-  - {{ addURIAndSha "https://github.com/eldadru/ksniff/releases/download/{{ .TagName }}/ksniff.zip" .TagName }}
+  - {{ addURIAndSha "https://github.com/samdotci/ksniff/releases/download/{{ .TagName }}/ksniff_{{ .TagName }}_linux_amd64.tar.gz" .TagName }}
     bin: kubectl-sniff
     files:
     - from: kubectl-sniff
@@ -39,22 +39,22 @@ spec:
       matchLabels:
         os: linux
         arch: amd64
-  - {{ addURIAndSha "https://github.com/eldadru/ksniff/releases/download/{{ .TagName }}/ksniff.zip" .TagName }}
-    bin: kubectl-sniff-arm64
+  - {{ addURIAndSha "https://github.com/samdotci/ksniff/releases/download/{{ .TagName }}/ksniff_{{ .TagName }}_linux_arm64.tar.gz" .TagName }}
+    bin: kubectl-sniff
     files:
-    - from: kubectl-sniff-linux-arm64
-      to: kubectl-sniff-arm64
+    - from: kubectl-sniff
+      to: .
     - from: LICENSE
       to: .
     selector:
       matchLabels:
         os: linux
         arch: arm64
-  - {{ addURIAndSha "https://github.com/eldadru/ksniff/releases/download/{{ .TagName }}/ksniff.zip" .TagName }}
+  - {{ addURIAndSha "https://github.com/samdotci/ksniff/releases/download/{{ .TagName }}/ksniff_{{ .TagName }}_windows_amd64.zip" .TagName }}
     bin: kubectl-sniff.exe
     files:
-    - from: kubectl-sniff-windows
-      to: kubectl-sniff.exe
+    - from: kubectl-sniff.exe
+      to: .
     - from: LICENSE
       to: .
     selector:

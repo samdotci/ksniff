@@ -1,65 +1,21 @@
-NEW_PLUGIN_SYSTEM_MINIMUM_KUBECTL_VERSION=12
-UNAME := $(shell uname)
-ARCH_NAME := $(shell uname -m)
-KUBECTL_MINOR_VERSION=$(shell kubectl version --client=true -o yaml | grep minor | grep -Eow "[0-9]+")
-IS_NEW_PLUGIN_SUBSYSTEM := $(shell [ $(KUBECTL_MINOR_VERSION) -ge $(NEW_PLUGIN_SYSTEM_MINIMUM_KUBECTL_VERSION) ] && echo true)
+.PHONY: test clean build install
 
-ifeq ($(IS_NEW_PLUGIN_SUBSYSTEM),true)
-PLUGIN_FOLDER=/usr/local/bin
-else
-PLUGIN_FOLDER=~/.kube/plugins/sniff
-endif
-
-ifeq ($(UNAME), Darwin)
-ifeq ($(ARCH_NAME), arm64)
-PLUGIN_NAME=kubectl-sniff-darwin-arm64
-else
-PLUGIN_NAME=kubectl-sniff-darwin
-endif
-endif
-
-ifeq ($(UNAME), Linux)
-ifeq ($(ARCH_NAME), arm64)
-PLUGIN_NAME=kubectl-sniff-arm64
-else
-PLUGIN_NAME=kubectl-sniff
-endif
-endif
-
-linux:
-	GO111MODULE=on GOOS=linux GOARCH=amd64 go build -o kubectl-sniff cmd/kubectl-sniff.go
-	GO111MODULE=on GOOS=linux GOARCH=arm64 go build -o kubectl-sniff-arm64 cmd/kubectl-sniff.go
-
-windows:
-	GO111MODULE=on GOOS=windows GOARCH=amd64 go build -o kubectl-sniff-windows cmd/kubectl-sniff.go
-
-darwin:
-	GO111MODULE=on GOOS=darwin GOARCH=amd64 go build -o kubectl-sniff-darwin cmd/kubectl-sniff.go
-	GO111MODULE=on GOOS=darwin GOARCH=arm64 go build -o kubectl-sniff-darwin-arm64 cmd/kubectl-sniff.go
-
-all: linux windows darwin
-
+# Run tests
 test:
-	GO111MODULE=on go test ./...
+	go test ./...
 
-package:
-	zip ksniff.zip kubectl-sniff kubectl-sniff-windows kubectl-sniff-darwin kubectl-sniff-darwin-arm64 Makefile plugin.yaml LICENSE
-
-install:
-	mkdir -p ${PLUGIN_FOLDER}
-	cp ${PLUGIN_NAME} ${PLUGIN_FOLDER}/kubectl-sniff
-	cp plugin.yaml ${PLUGIN_FOLDER}
-
-uninstall:
-	rm -f ${PLUGIN_FOLDER}/kubectl-sniff
-	rm -f ${PLUGIN_FOLDER}/plugin.yaml
-
-verify_version:
-	./scripts/verify_version.sh
-
+# Clean build artifacts
 clean:
+	rm -rf dist/
 	rm -f kubectl-sniff
-	rm -f kubectl-sniff-windows
-	rm -f kubectl-sniff-darwin
-	rm -f kubectl-sniff-darwin-arm64
+	rm -f kubectl-sniff-*
 	rm -f ksniff.zip
+
+# Local development build (builds for current platform only)
+build:
+	go build -o kubectl-sniff cmd/kubectl-sniff.go
+
+# Install locally (for development/testing)
+install: build
+	mkdir -p /usr/local/bin
+	cp kubectl-sniff /usr/local/bin/kubectl-sniff

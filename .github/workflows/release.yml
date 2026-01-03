@@ -4,40 +4,35 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: write
+
 jobs:
-  build-and-package:
+  goreleaser:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: 1.24.11
+          go-version-file: go.mod
+          cache: true
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libpcap-dev gcc
-
-      - name: Build
-        run: make all
-
-      - name: Package
-        run: make package
-
-      - name: Upload release asset
-        uses: actions/upload-release-asset@v1
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ./ksniff.zip
-          asset_name: ksniff.zip
-          asset_content_type: application/zip
 
-      # - name: Update Krew index
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #   run: bash scripts/update-krew-index.sh
+      - name: Update new version in krew-index
+        uses: rajatjindal/krew-release-bot@v0.0.47
+        env:
+          UPSTREAM_KREW_INDEX_REPO_OWNER: "${{ github.repository_owner }}"
+          UPSTREAM_KREW_INDEX_REPO_NAME: "custom-krew-index"
