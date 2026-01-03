@@ -29,7 +29,8 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version: 1.24.11
+          go-version-file: go.mod
+          cache: true
 
       - uses: AbsaOSS/k3d-action@v2.4.0
         name: "Create Single Cluster"
@@ -47,14 +48,17 @@ jobs:
           kubectl wait --for=condition=Ready pod/busybox-sleep
 
       - name: Build
-        run: |
-          make
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          args: build --single-target --snapshot --clean
 
       - name: Run ksniff with ephemeral container
         run: |
           sleep 60 && pkill kubectl-sniff & 
           set +e
-          ./kubectl-sniff busybox-sleep --namespace default --output-file /tmp/output.pcap
+          ./dist/kubectl-sniff_linux_amd64_v1/kubectl-sniff busybox-sleep --namespace default --output-file /tmp/output.pcap
           set -e
           if [ ! -f /tmp/output.pcap ]; then
             echo "PCAP not created"

@@ -16,6 +16,7 @@ ksniff uses Kubernetes ephemeral containers to attach a tcpdump container to you
 redirecting its output to your local Wireshark for smooth network debugging experience.
 
 ### Demo
+
 ![Demo!](https://i.imgur.com/hWtF9r2.gif)
 
 ### Requirements
@@ -24,10 +25,12 @@ redirecting its output to your local Wireshark for smooth network debugging expe
 - Wireshark 3.4.0+ (if using the GUI)
 
 ### Production Readiness
+
 Ksniff [isn't production ready yet](https://github.com/eldadru/ksniff/issues/96#issuecomment-762454991), running ksniff for production workloads isn't recommended at this point.
 
 ## Installation
-Installation via krew (https://github.com/GoogleContainerTools/krew)
+
+Installation via krew (<https://github.com/GoogleContainerTools/krew>)
 
     kubectl krew install sniff
     
@@ -43,14 +46,28 @@ If you are using Wireshark with ksniff you must use at least version 3.4.0. Usin
 ## Build
 
 Requirements:
-1. go 1.11 or newer
 
-Compiling:
- 
-    linux:      make linux
-    windows:    make windows
-    mac:        make darwin
- 
+1. Go 1.24 or newer
+2. [GoReleaser](https://goreleaser.com/) (optional, for release builds)
+
+### Development Build
+
+For local development:
+
+    make build
+
+This will create a `kubectl-sniff` binary for your current platform.
+
+### Release Build
+
+For multi-platform release builds:
+
+    goreleaser release --snapshot --clean
+
+Or to build for all platforms without creating a release:
+
+    goreleaser build --snapshot --clean
+
 ### Usage
 
     kubectl sniff <POD_NAME> [-n <NAMESPACE_NAME>] [-c <CONTAINER_NAME>] [-i <INTERFACE_NAME>] [-f <CAPTURE_FILTER>] [-o OUTPUT_FILE]
@@ -70,6 +87,7 @@ Compiling:
     -v, --verbose: Enable debug output
 
 #### Air gapped environments
+
 Use `--tcpdump-image` flag (or KUBECTL_PLUGINS_LOCAL_FLAG_TCPDUMP_IMAGE environment variable) to override the default container image:
   
     kubectl sniff <POD_NAME> [-n <NAMESPACE_NAME>] --tcpdump-image <PRIVATE_REPO>/netshoot
@@ -87,6 +105,7 @@ Benefits of ephemeral containers:
 - Automatic cleanup when the pod is deleted
 
 #### Piping output to stdout
+
 By default ksniff will attempt to start a local instance of the Wireshark GUI. You can integrate with other tools
 using the `-o -` flag to pipe packet cap data to stdout.
 
@@ -95,7 +114,8 @@ Example using `tshark`:
     kubectl sniff pod-name -f "port 80" -o - | tshark -r -
 
 ### Contribution
-More than welcome! please don't hesitate to open bugs, questions, pull requests 
+
+More than welcome! please don't hesitate to open bugs, questions, pull requests
 
 ### Known Issues
 
